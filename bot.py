@@ -509,11 +509,11 @@ def init_db():
         ("premium",    "Telegram Premium","Telegram Premium","💎", "primary", 2, 1, "Telegram Premium"),
         ("ton",        "Купити TON",      "Купити TON",      "💎", "primary", 3, 1, "Buy TON"),
         ("profile",    "Профіль",         "Профіль",         "👤", "success", 4, 2, "Profile"),
-        ("reviews",    "Відгуки",         "Відгуки",         "💬", "default", 10, 4, "Reviews"),
-        ("sell_stars", "Продати Stars",   "Продати Stars",   "💰", "success", 6, 2, "Sell Stars"),
+        ("reviews",    "Відгуки",         "Відгуки",         "💬", "default", 6, 2, "Reviews"),
+        ("sell_stars", "Продати Stars",   "Продати Stars",   "💰", "success", 5, 2, "Sell Stars"),
         ("referral",   "Реферали",        "Реферали",        "👥", "default", 7, 3, "Referrals"),
         ("support",    "Підтримка",       "Підтримка",       "🆘", "default", 8, 3, "Support"),
-        ("calculator", "Калькулятор",     "Калькулятор",     "🧮", "default", 9, 4, "Calculator"),
+        ("calculator", "Калькулятор",     "Калькулятор",     "🧮", "default", 9, 3, "Calculator"),
     ]
     for b in btns:
         c.execute("""INSERT OR IGNORE INTO menu_buttons
@@ -528,6 +528,16 @@ def init_db():
             # Кнопка вже існувала: лише донатягуємо англійський переклад, якщо його ще нема.
             c.execute("""UPDATE menu_buttons SET text_en=COALESCE(NULLIF(text_en,''), ?)
                 WHERE button_key=?""", (b[7], b[0]))
+
+    # Одноразова міграція: меню 3 ряди по 3 кнопки
+    c.execute("SELECT value FROM settings WHERE key='menu_layout_3x3'")
+    if not c.fetchone():
+        layout = [("stars",1,1),("premium",2,1),("ton",3,1),
+                  ("profile",4,2),("sell_stars",5,2),("reviews",6,2),
+                  ("referral",7,3),("support",8,3),("calculator",9,3)]
+        for key,pos,row in layout:
+            c.execute("UPDATE menu_buttons SET position=?, row_num=? WHERE button_key=?", (pos,row,key))
+        c.execute("INSERT OR REPLACE INTO settings (key,value) VALUES ('menu_layout_3x3','1')")
 
     # Видаляємо кнопки мови/топів/бонусу/ігор якщо залишились у БД зі старих версій
     c.execute("""DELETE FROM menu_buttons WHERE button_key IN
