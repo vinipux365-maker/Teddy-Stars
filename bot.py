@@ -152,6 +152,33 @@ class LangMiddleware:
             _current_lang.reset(token)
 
 dp.message.outer_middleware(LangMiddleware())
+
+class MenuButtonResetMiddleware:
+    """Якщо користувач натиснув кнопку головного меню, поки бот чекає на текстовий
+    ввод (кількість зірок, username тощо) — скидаємо стан, щоб кнопка спрацювала,
+    а не сприймалась як невалідне число."""
+    async def __call__(self, handler, event, data):
+        try:
+            text = (getattr(event, "text", None) or "").strip()
+            state = data.get("state")
+            if text and state is not None and not text.startswith("/"):
+                cur = await state.get_state()
+                if cur and cur != "S:menu" and not cur.split(":")[-1].startswith("admin"):
+                    for b in get_menu_buttons():
+                        labels = set()
+                        for col in ("text_uk", "text_ru", "text_en"):
+                            t = (b.get(col) or "").strip()
+                            if t:
+                                labels.add(t)
+                                labels.add(f"{b.get('emoji') or ''} {t}".strip())
+                        if text in labels:
+                            await state.set_state(S.menu)
+                            break
+        except Exception as e:
+            logger.error(f"MenuButtonResetMiddleware: {e}")
+        return await handler(event, data)
+
+dp.message.outer_middleware(MenuButtonResetMiddleware())
 dp.callback_query.outer_middleware(LangMiddleware())
 dp.pre_checkout_query.outer_middleware(LangMiddleware())
 
@@ -487,7 +514,6 @@ def init_db():
         ("referral",   "Реферали",        "Реферали",        "👥", "default", 7, 3, "Referrals"),
         ("support",    "Підтримка",       "Підтримка",       "🆘", "default", 8, 3, "Support"),
         ("calculator", "Калькулятор",     "Калькулятор",     "🧮", "default", 9, 4, "Calculator"),
-        ("gift",       "Подарунки",       "Подарунки",       "🎁", "success", 5, 2, "Gifts"),
     ]
     for b in btns:
         c.execute("""INSERT OR IGNORE INTO menu_buttons
@@ -505,7 +531,7 @@ def init_db():
 
     # Видаляємо кнопки мови/топів/бонусу/ігор якщо залишились у БД зі старих версій
     c.execute("""DELETE FROM menu_buttons WHERE button_key IN
-        ('changelang','daily_bonus','top_buyers','top_winners','games','language')""")
+        ('changelang','daily_bonus','top_buyers','top_winners','games','language','gift')""")
     # Преміум-емодзі на кнопці "🎁 Подарунки" — задаємо лише якщо ще не задано
     # вручну через адмінку (щоб не перезаписати ручні налаштування).
     c.execute("""UPDATE menu_buttons SET custom_emoji_id=?
